@@ -1,0 +1,94 @@
+import requests
+from bs4 import BeautifulSoup
+import re
+import time
+
+# Telegram bot token en chat ID
+TELEGRAM_TOKEN = 'eigen token'
+CHAT_ID = 'eigen chat ID'
+
+# URL van de PlayStation 5 op bol.com
+BOL_URL = 'https://www.bol.com/nl/nl/p/playstation-5-digital-edition-dualsense-controller-slim/9300000171979393/?s2a=&bltgh=t3NCOFMd-Vo-DCQh-XpKLQ.2_47_48.49.FeatureOption#productTitle'
+
+# URL van de Iphone 15 op coolblue
+COOLBLUE_URL = 'https://www.coolblue.nl/product/935188/apple-iphone-15-128gb-zwart.html'
+
+# Maximale prijs waarvoor je een melding wilt ontvangen voor de PlayStation 5
+MAX_PRICE_PLAYSTATION = 500
+
+# Maximale prijs waarvoor je een melding wilt ontvangen voor de Iphone
+MAX_PRICE_IPHONE = 900
+
+def send_telegram_message(message):
+    url = f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage'
+    payload = {
+        'chat_id': CHAT_ID,
+        'text': message
+    }
+    response = requests.post(url, data=payload)
+    if response.status_code != 200:
+        print(f'Failed to send message: {response.status_code} - {response.text}')
+
+def scrape_bol():
+    response = requests.get(BOL_URL)
+    if response.status_code != 200:
+        print(f'Failed to retrieve bol.com page: {response.status_code}')
+        return None
+    
+    soup = BeautifulSoup(response.text, 'html.parser')
+    
+    # Zoek naar de prijs van de PlayStation 5
+    price_element = soup.find('span', {'class': 'promo-price'})
+    if price_element:
+        price_text = price_element.text.strip()
+        # Extract alleen de numerieke waarden
+        price_digits = re.findall(r'\d+', price_text)
+        price = float('.'.join(price_digits))
+        print(f'Current price of PlayStation 5: €{price}')
+        return price
+    else:
+        print('Price element not found')
+        return None
+
+def scrape_coolblue():
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'}
+    response = requests.get(COOLBLUE_URL, headers=headers)
+    if response.status_code != 200:
+        print(f'Failed to retrieve Coolblue page: {response.status_code}')
+        return None
+    
+    soup = BeautifulSoup(response.text, 'html.parser')
+    
+    price_element = soup.find('strong', {'class': 'sales-price__current js-sales-price-current'})
+    if price_element:
+        price_text = price_element.text.strip()
+        # Extract alleen de numerieke waarden
+        price_digits = re.findall(r'\d+', price_text)
+        price = float('.'.join(price_digits))
+        print(f'Current price of iPhone 15: €{price}')
+        return price
+    else:
+        print('Price element not found')
+        return None
+
+def check_price():
+    price_playstation = scrape_bol()
+    price_iphone = scrape_coolblue()
+    
+    if price_playstation and price_playstation < MAX_PRICE_PLAYSTATION:
+        send_telegram_message(f'De PlayStation 5 is nu in de korting voor minder dan €{MAX_PRICE_PLAYSTATION} op bol.com!')
+    elif price_playstation:
+        send_telegram_message(f'De Playstation 5 is nu  €{price_playstation} op bol.com!')
+
+    if price_iphone and price_iphone < MAX_PRICE_IPHONE:
+        send_telegram_message(f'De Iphone 15 is nu in de korting voor minder dan €{MAX_PRICE_IPHONE} op coolblue.nl!')
+    elif price_iphone:
+        send_telegram_message(f'De Iphone 15 is nu €{price_iphone} op coolblue.nl!')
+
+def main():
+    while True:
+        check_price()
+        time.sleep(3600)  # Controleer elke 1 uur
+
+if __name__ == '__main__':
+    main()
